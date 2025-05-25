@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>List Designs Now</title>
+  <style>
+    body { font-family: sans-serif; max-width: 800px; margin: auto; padding: 1rem; }
+    img { max-width: 100%; height: auto; margin-bottom: 1rem; }
+    .prompt { font-style: italic; color: #555; }
+  </style>
+</head>
+<body>
+  <h1>Generated Images</h1>
+  <p>To create a new image, go to the <strong>Actions → “Generate Image” → Run workflow</strong> and enter your prompt.</p>
+  <div id="images"></div>
+
+  <script>
+    // Load the gallery from images/index.json
+    fetch('images/index.json')
+      .then(r => r.json())
+      .then(list => {
+        const container = document.getElementById('images');
+        list.forEach(filename => {
+          const img = document.createElement('img');
+          img.src = `images/${filename}`;
+          img.alt = filename;
+          container.appendChild(img);
+        });
+      });
+  </script>
+</body>
+</html>
