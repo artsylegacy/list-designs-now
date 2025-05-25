@@ -31,53 +31,54 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          python << 'PYCODE'
+          python <<'PYCODE'
 import os, json, time, requests
 
-prompt   = os.getenv('INPUT_PROMPT')
-image    = os.getenv('INPUT_IMAGE_URL')
-mask     = os.getenv('INPUT_MASK_URL')
-size     = '512x512'
-n        = 1
-endpoint = 'https://api.openai.com/v1/images/generations'
-payload  = {'prompt': prompt, 'n': n, 'size': size}
+prompt = os.getenv('INPUT_PROMPT')
+image_url = os.getenv('INPUT_IMAGE_URL')
+mask_url = os.getenv('INPUT_MASK_URL')
+size = '512x512'
+n = 1
 
-if image:
+endpoint = 'https://api.openai.com/v1/images/generations'
+payload = {'prompt': prompt, 'n': n, 'size': size}
+
+if image_url:
     endpoint = 'https://api.openai.com/v1/images/edits'
-    payload['image'] = image
-    if mask:
-        payload['mask'] = mask
+    payload['image'] = image_url
+    if mask_url:
+        payload['mask'] = mask_url
 
 headers = {
     'Authorization': f"Bearer {os.environ['OPENAI_API_KEY']}",
     'Content-Type': 'application/json'
 }
 
-resp = requests.post(endpoint, headers=headers, json=payload).json()
-url  = resp['data'][0]['url']
+response = requests.post(endpoint, headers=headers, json=payload).json()
+url = response['data'][0]['url']
 
-# Download the generated image
-fname = f"{int(time.time())}.png"
+# Download the image
+filename = f"{int(time.time())}.png"
 os.makedirs('images', exist_ok=True)
 img_data = requests.get(url).content
-with open(f'images/{fname}', 'wb') as f:
+with open(f'images/{filename}', 'wb') as f:
     f.write(img_data)
 
-# Update index.json
-idx_file = 'images/index.json'
-if os.path.exists(idx_file):
-    imgs = json.load(open(idx_file))
+# Update images/index.json
+index_file = 'images/index.json'
+if os.path.exists(index_file):
+    imgs = json.load(open(index_file))
 else:
     imgs = []
-imgs.insert(0, fname)
-with open(idx_file, 'w') as f:
+imgs.insert(0, filename)
+with open(index_file, 'w') as f:
     json.dump(imgs, f)
 
-# Commit changes
+# Commit & push changes
 os.system('git config user.name "github-actions[bot]"')
 os.system('git config user.email "github-actions[bot]@users.noreply.github.com"')
 os.system('git add images')
-os.system('git commit -m "Add image for prompt: ' + prompt.replace("\"","")[:20] + '..."')
+os.system('git commit -m "Add image for prompt: ' + prompt.replace(\'"\', "")[:20] + '..."')
 os.system('git push')
 PYCODE
 
