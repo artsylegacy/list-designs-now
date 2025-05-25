@@ -1,0 +1,85 @@
+name: Generate Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: 'Image prompt'
+        required: true
+      image_url:
+        description: 'Existing image URL (optional)'
+        required: false
+      mask_url:
+        description: 'Mask URL (optional)'
+        required: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Generate or Edit Image
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          python << 'PYCODE'
+import os, json, time, requests
+
+prompt   = os.getenv('INPUT_PROMPT')
+image    = os.getenv('INPUT_IMAGE_URL')
+mask     = os.getenv('INPUT_MASK_URL')
+size     = '512x512'
+n        = 1
+endpoint = 'https://api.openai.com/v1/images/generations'
+payload  = {'prompt': prompt, 'n': n, 'size': size}
+
+if image:
+    endpoint = 'https://api.openai.com/v1/images/edits'
+    payload['image'] = image
+    if mask:
+        payload['mask'] = mask
+
+headers = {
+    'Authorization': f"Bearer {os.environ['OPENAI_API_KEY']}",
+    'Content-Type': 'application/json'
+}
+
+resp = requests.post(endpoint, headers=headers, json=payload).json()
+url  = resp['data'][0]['url']
+
+# Download the generated image
+fname = f"{int(time.time())}.png"
+os.makedirs('images', exist_ok=True)
+img_data = requests.get(url).content
+with open(f'images/{fname}', 'wb') as f:
+    f.write(img_data)
+
+# Update index.json
+idx_file = 'images/index.json'
+if os.path.exists(idx_file):
+    imgs = json.load(open(idx_file))
+else:
+    imgs = []
+imgs.insert(0, fname)
+with open(idx_file, 'w') as f:
+    json.dump(imgs, f)
+
+# Commit changes
+os.system('git config user.name "github-actions[bot]"')
+os.system('git config user.email "github-actions[bot]@users.noreply.github.com"')
+os.system('git add images')
+os.system('git commit -m "Add image for prompt: ' + prompt.replace("\"","")[:20] + '..."')
+os.system('git push')
+PYCODE
+
+      - name: Done
+        run: echo "Image generated and committed."
