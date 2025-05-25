@@ -17,6 +17,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+
       - name: Checkout repo
         uses: actions/checkout@v3
 
@@ -25,31 +26,36 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install dependencies and generate image
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Write and run image script
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          INPUT_PROMPT: ${{ github.event.inputs.prompt }}
+          INPUT_IMAGE_URL: ${{ github.event.inputs.image_url }}
+          INPUT_MASK_URL: ${{ github.event.inputs.mask_url }}
         run: |
-          pip install requests
-          python - << 'EOF'
+          cat > generate_image.py << 'PYCODE'
 import os
 import json
 import time
 import requests
 
-prompt = os.getenv('INPUT_PROMPT')
-image_url = os.getenv('INPUT_IMAGE_URL')
-mask_url = os.getenv('INPUT_MASK_URL')
-size = '512x512'
-n = 1
+prompt   = os.getenv('INPUT_PROMPT')
+image    = os.getenv('INPUT_IMAGE_URL')
+mask     = os.getenv('INPUT_MASK_URL')
+size     = '512x512'
+n        = 1
 
 endpoint = 'https://api.openai.com/v1/images/generations'
-payload = {'prompt': prompt, 'n': n, 'size': size}
+payload  = {'prompt': prompt, 'n': n, 'size': size}
 
-if image_url:
+if image:
     endpoint = 'https://api.openai.com/v1/images/edits'
-    payload['image'] = image_url
-    if mask_url:
-        payload['mask'] = mask_url
+    payload['image'] = image
+    if mask:
+        payload['mask'] = mask
 
 headers = {
     'Authorization': f"Bearer {os.environ['OPENAI_API_KEY']}",
@@ -57,32 +63,34 @@ headers = {
 }
 
 resp = requests.post(endpoint, headers=headers, json=payload).json()
-url = resp['data'][0]['url']
+url  = resp['data'][0]['url']
 
-# Download image
+# Download the image
 fname = f"{int(time.time())}.png"
 os.makedirs('images', exist_ok=True)
 img_data = requests.get(url).content
-with open(f'images/{fname}', 'wb') as img_file:
-    img_file.write(img_data)
+with open(f'images/{fname}', 'wb') as f:
+    f.write(img_data)
 
-# Update index.json
+# Update images/index.json
 index_file = 'images/index.json'
 if os.path.exists(index_file):
     imgs = json.load(open(index_file))
 else:
     imgs = []
 imgs.insert(0, fname)
-with open(index_file, 'w') as idx:
-    json.dump(imgs, idx)
+with open(index_file, 'w') as f:
+    json.dump(imgs, f)
 
 # Commit & push
 os.system('git config user.name "github-actions[bot]"')
 os.system('git config user.email "github-actions[bot]@users.noreply.github.com"')
 os.system('git add images')
-os.system('git commit -m "Add image for prompt: ' + prompt.replace('"', '')[:20] + '..."')
+os.system('git commit -m "Add image for prompt: ' + prompt.replace(\'"\', '')[:20] + '..."')
 os.system('git push')
-EOF
+PYCODE
+
+          python generate_image.py
 
       - name: Done
         run: echo "Image generated and committed."
