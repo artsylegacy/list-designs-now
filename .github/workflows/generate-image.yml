@@ -17,22 +17,24 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repo
+        uses: actions/checkout@v3
 
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.x'
 
-      - name: Install dependencies
-        run: pip install requests
-
-      - name: Generate or Edit Image
+      - name: Install dependencies and generate image
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          python <<'PYCODE'
-import os, json, time, requests
+          pip install requests
+          python - << 'EOF'
+import os
+import json
+import time
+import requests
 
 prompt = os.getenv('INPUT_PROMPT')
 image_url = os.getenv('INPUT_IMAGE_URL')
@@ -54,33 +56,33 @@ headers = {
     'Content-Type': 'application/json'
 }
 
-response = requests.post(endpoint, headers=headers, json=payload).json()
-url = response['data'][0]['url']
+resp = requests.post(endpoint, headers=headers, json=payload).json()
+url = resp['data'][0]['url']
 
-# Download the image
-filename = f"{int(time.time())}.png"
+# Download image
+fname = f"{int(time.time())}.png"
 os.makedirs('images', exist_ok=True)
 img_data = requests.get(url).content
-with open(f'images/{filename}', 'wb') as f:
-    f.write(img_data)
+with open(f'images/{fname}', 'wb') as img_file:
+    img_file.write(img_data)
 
-# Update images/index.json
+# Update index.json
 index_file = 'images/index.json'
 if os.path.exists(index_file):
     imgs = json.load(open(index_file))
 else:
     imgs = []
-imgs.insert(0, filename)
-with open(index_file, 'w') as f:
-    json.dump(imgs, f)
+imgs.insert(0, fname)
+with open(index_file, 'w') as idx:
+    json.dump(imgs, idx)
 
-# Commit & push changes
+# Commit & push
 os.system('git config user.name "github-actions[bot]"')
 os.system('git config user.email "github-actions[bot]@users.noreply.github.com"')
 os.system('git add images')
-os.system('git commit -m "Add image for prompt: ' + prompt.replace(\'"\', "")[:20] + '..."')
+os.system('git commit -m "Add image for prompt: ' + prompt.replace('"', '')[:20] + '..."')
 os.system('git push')
-PYCODE
+EOF
 
       - name: Done
         run: echo "Image generated and committed."
